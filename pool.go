@@ -61,6 +61,10 @@ type Pool struct {
 	// PanicHandler is used to handle panics from each worker goroutine.
 	// if nil, panics will be thrown out again from worker goroutines.
 	PanicHandler func(interface{})
+
+	ResizeFunc func(int32) int32
+
+	blockCnt uint32
 }
 
 // clear expired workers periodically.
@@ -208,6 +212,14 @@ func (p *Pool) retrieveWorker() *Worker {
 		}
 		w.run()
 	} else {
+		curBlockCnt := atomic.AddUint32(&p.blockCnt, 1)
+		if curBlockCnt >= DefaultBlockCnt {
+			p.resize()
+			p.blockCnt = 0
+			p.lock.Unlock()
+			return p.retrieveWorker()
+		}
+
 		for {
 			p.cond.Wait()
 			l := len(p.workers) - 1
@@ -232,4 +244,15 @@ func (p *Pool) revertWorker(worker *Worker) {
 	// Notify the invoker stuck in 'retrieveWorker()' of there is an available worker in the worker queue.
 	p.cond.Signal()
 	p.lock.Unlock()
+}
+
+func (p *Pool) resize() {
+	newSize := 2 * p.capacity
+	if p.ResizeFunc != nil {
+		userNewSize := p.ResizeFunc(p.capacity)
+		if userNewSize <= p.capacity {
+			newSize = userNewSize
+		}
+	}
+	atomic.StoreInt32(&p.capacity, newSize)
 }

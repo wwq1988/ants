@@ -34,6 +34,9 @@ const (
 
 	// DefaultCleanIntervalTime is the interval time to clean up goroutines.
 	DefaultCleanIntervalTime = 5
+
+	// DefaultBlockCnt is the task blocked to wait for goroutine acquisition
+	DefaultBlockCnt = 10
 )
 
 var (
